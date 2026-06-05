@@ -1,0 +1,82 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{booktabs}
+
+\geometry{margin=1in}
+
+% --- Title Information ---
+\title{{\bf MLDS HOMEWORK 2} \\
+(MODEL EVALUATION)}
+\author{Denis Nedić}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\vspace{-1cm} % Pulls the first section up slightly to save space
+
+\section{\bf{Part 1} Model evaluation and comparison}
+\subsection{Methodology and results}
+To predict basketball shot types, three models were evaluated: \textbf{Baseline classifier} (predicting relative class frequencies), \textbf{Logistic Regression}, and a \textbf{Decision Tree}.
+Because Decision Trees are highly sensitive to overfitting, the maximum depth parameter was tuned using two distinct methodologies: optimizing directly on the training fold
+and employing nested cross-validation. Performance was estimated using standard cross-validation, with Classification Accuracy and Log-Score serving as the primary evaluation metrics.
+\begin{table}[htpb]
+    \centering
+    \caption{Cross-Validation Performance Metrics (Mean $\pm$ Standard Deviation)}
+    \label{tab:model_comparison}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Model} & \textbf{Accuracy} & \textbf{Log-Score} \\
+        \midrule
+        Baseline Classifier & $0.6081 \pm 0.0132$ & $1.1658 \pm 0.0282$ \\
+        Logistic Regression & $0.7361 \pm 0.0245$ & $\mathbf{0.6729 \pm 0.0545}$ \\
+        Decision Tree (Train-Opt) & $0.7034 \pm 0.0243$ & $10.0925 \pm 0.8872$ \\
+        Decision Tree (Nested CV) & $\mathbf{0.7486 \pm 0.0230}$ & $1.0858 \pm 0.2290$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+Table \ref{tab:model_comparison} summarizes the cross-validation results, reporting the mean and standard deviation across folds. The Decision Tree evaluated via Nested CV, which utilized 10-fold
+cross-validation for both the inner parameter tuning loop and the outer evaluation loop. It achieved the highest overall classification accuracy, while Logistic Regression achieved the most optimal 
+(lowest) log-score. Most notably, optimizing the Decision Tree directly on the training fold resulted in slightly lower accuracy but a catastrophic, highly volatile log-score. This severe penalty 
+occurs because standard training fold optimization leads to massive overfitting; the tree creates overly deep, pure leaves that output overconfident, incorrect predictions (probabilities near 1.0 or 0.0), 
+which are heavily penalized by log-loss. Employing nested cross-validation provided a much more stable and unbiased evaluation by strictly separating the depth-tuning process from the validation data, mitigating this overconfidence and significantly improving both metrics.
+\section{{\bf Part 2}}
+\subsection{Error dependency}
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.7\linewidth]{HW2/error.png} 
+    \caption{Actual Error Rate and Model Uncertainty by 5-Degree Angle Bins.}
+    \label{fig:angle_plots}
+\end{figure}
+To address the suspicion that prediction error depends on the shot angle, the continuous angle variable was discretized into 5-degree bins. Visual inspection of the binned error rates (Figure \ref{fig:angle_plots}) revealed a complex, wave-like distribution for both the Logistic Regression and Decision Tree models.
+
+To formally evaluate this relationship, a Pearson's Chi-squared test of independence was utilized. This methodology evaluates whether prediction mistakes are disproportionately concentrated in specific 
+angle sectors by treating the bins categorically, requiring no underlying assumptions about the mathematical shape of the data. The test yielded highly statistically significant p-values for both models (p$<$0.001). 
+Therefore, we firmly confirm the initial suspicion: the model's error rates are heavily dependent on the shot angle. Specifically, visual evaluation confirms both models struggle significantly more at the mid-wings 
+while maintaining higher accuracy near the center and the extreme baseline.
+\subsection{Adjusting for true frequencies}
+The original dataset has roughly equal representation for each competition, but in reality, the NBA accounts for 60\% of shots while the other four types account for only 10\% each. To estimate real-world performance, we calculated the accuracy and log-loss for each competition separately and then used a weighted average based on these true percentages. This allows us to see how the models perform on the actual data distribution without retraining.
+\begin{table}[htpb]
+    \centering
+    \caption{Model Performance Adjusted for True Competition Frequencies}
+    \label{tab:reweighted_metrics}
+    \begin{tabular}{lcccc}
+        \toprule
+        & \multicolumn{2}{c}{\textbf{Unweighted (Original)}} & \multicolumn{2}{c}{\textbf{Weighted (True Freq.)}} \\
+        \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        \textbf{Model} & \textbf{Accuracy} & \textbf{Log-Loss} & \textbf{Accuracy} & \textbf{Log-Loss} \\
+        \midrule
+        Decision Tree (Nested CV) & 0.749 & 0.844 & 0.753 & 0.840 \\
+        Logistic Regression & 0.736 & 0.673 & \textbf{0.753} & \textbf{0.656} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+As shown in Table \ref{tab:reweighted_metrics}, both models perform better when adjusted for the true frequencies. The accuracy for both increases to 0.753, and the log-loss for Logistic Regression improves. This suggests the models are more accurate at predicting NBA shots than shots from other competitions. Since the NBA makes up a much larger portion of the real-world data, the models' overall reliability is actually higher than the initial results suggested.
+\end{document}
