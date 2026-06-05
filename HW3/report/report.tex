@@ -1,0 +1,173 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FRI Data Science_report LaTeX Template
+% Version 1.0 (28/1/2020)
+%
+% Jure Demšar (jure.demsar@fri.uni-lj.si)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%   PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+\documentclass[fleqn,moreauthors,10pt]{ds_report}
+\usepackage[english]{babel}
+
+\graphicspath{{fig/}}
+
+%----------------------------------------------------------------------------------------
+%   ARTICLE INFORMATION
+%----------------------------------------------------------------------------------------
+
+% Header
+\JournalInfo{Machine Learning for Data Science 1, 2025-2026}
+
+% Interim or final report
+\Archive{Homework 3 Report}
+
+% Article title
+\PaperTitle{Generalized Linear Models}
+
+% Authors and their info
+\Authors{Denis Nedić}
+\affiliation{\textit{dn98183@student.uni-lj.si}}
+
+%----------------------------------------------------------------------------------------
+
+\makeatletter
+\renewcommand{\@maketitle}{%
+\twocolumn[{%
+\thispagestyle{empty}%
+{\includegraphics[height=2cm]{logo}}
+\vskip-74pt%
+{\raggedleft\small\sffamily\bfseries\@JournalInfo\\\@Archive\par}%
+\vskip64pt%
+{\raggedright\color{color1}\fontfamily{cmss}\fontseries{bc}\fontshape{n}\fontsize{20}{25}\selectfont \@PaperTitle\par}%
+\vskip10pt%
+{\raggedright\color{color1}\sffamily\fontsize{12}{16}\selectfont  \@Authors\par}%
+\vskip8pt%
+\begingroup%
+\raggedright\sffamily\small%
+\footnotesize\@affiliation\par%
+\endgroup%
+\vskip10pt%
+}]%
+}
+\makeatother
+
+\begin{document}
+
+% Makes all text pages the same height
+\flushbottom
+
+% Print the title and abstract box
+\maketitle
+
+% Removes page numbering from the first page
+\thispagestyle{empty}
+
+%----------------------------------------------------------------------------------------
+%   ARTICLE CONTENTS
+%----------------------------------------------------------------------------------------
+
+\section*{Introduction}
+In Part 1 of this assignment, I implemented multinomial and ordinal logistic regression models using both 
+a custom Python autograd engine and the \texttt{scipy.optimize} library, comparing their execution speed 
+and numerical stability. 
+\vspace{0.2cm}
+\\
+In Part 2, I applied the multinomial model to analyze feature significance in basketball shot selection 
+and constructed a custom Data-Generating Process (DGP) to demonstrate the statistical advantage of 
+ordinal regression over multinomial regression when predicting rare, ordered classes.
+
+%------------------------------------------------
+
+\section*{Part 1: Model Implementation}
+\textbf{1. Numerical Stability \& Implementation Challenges}\\
+During the development of the custom autograd engine, the model exhibited high sensitivity to floating-point 
+limits, frequently resulting in an \texttt{OverflowError} due to exploding gradients. This occurred during 
+the backward pass when calculating the derivative of the negative log-likelihood if the predicted 
+probability $p$ approached zero. 
+
+To resolve this, two mathematical safety nets were implemented: first, correcting the base of the custom 
+sigmoid function to ensure values could not trigger a division by zero, and second, introducing an epsilon 
+bound ($p = p + 10^{-15}$) prior to the log calculation. In contrast, the \textbf{scipy} implementation was 
+highly stable. By defining explicit parameter bounds, it naturally avoided these floating point overflow 
+errors without requiring manual mathematical clipping.
+\vspace{0.3cm}
+
+\textbf{2. Speed and Optimization Mechanics}\\
+The optimization mechanics between the two implementations yielded a massive difference in execution time. 
+The custom autograd engine required manual hyperparameter tuning (specifically the learning rate and the 
+number of epochs) to prevent the weights from diverging. 
+
+Conversely, optimization using Scipy utilized the L-BFGS-B algorithm, a dynamically scaling quasi-Newton 
+method. Because L-BFGS-B approximates the inverse Hessian matrix to intelligently adjust step sizes, it 
+converged in a fraction of the iterations without the need for learning rate tuning, resulting in 
+execution speeds roughly \textbf{150} times faster for Multinomial logistic regression and \textbf{50} 
+times faster for Ordinal logistic regression than the pure Python autograd engine.
+\vspace{0.3cm}
+
+\textbf{3. Convergence and Final Performance}\\
+Despite utilizing entirely different optimization strategies, both models successfully learned the 
+underlying distribution, though they exhibited expected variations in their final convergence points. 
+Evaluating the models on a dummy dataset revealed a maximum absolute difference between the learned 
+feature weights of $0.2988$. Furthermore, the Mean Absolute Error (MAE) of the final probability 
+predictions between the two models was $0.0735$. 
+
+This slight variation perfectly highlights the difference between the algorithms: the custom autograd 
+engine relies on basic gradient descent with a fixed learning rate and epoch limit, meaning it was 
+still incrementally approaching the exact minimum when training stopped. In contrast, Scipy's L-BFGS-B 
+algorithm dynamically scales step sizes to pinpoint the exact global minimum almost immediately. 
+Nevertheless, a prediction MAE of $\sim 0.07$ confirms that both the custom computational graph and the 
+Scipy minimizer were structurally sound and functionally equivalent in traversing the loss landscape.
+
+%------------------------------------------------
+
+\section*{Part 2: Application \& Analysis}
+
+\textbf{1. Basketball Shot Selection Analysis (Part 2.1)}\\
+To analyze the factors influencing shot selection, I trained the custom \texttt{MultinomialLogReg} model 
+on the provided basketball dataset. To establish a meaningful baseline, I forced the \textbf{``above head''} 
+(standard jump shot) to be the reference class. Analyzing the resulting weights and p-values yielded 
+several statistically significant insights:
+
+\begin{table}[h!]
+    \centering
+    \caption{Significant Features (vs. Above Head)}
+    \vspace{0.1cm}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{llrrrr}
+        \hline
+        \textbf{Target} & \textbf{Feature} & \textbf{Coef ($\beta$)} & \textbf{SE} & \textbf{$p$-value} & \textbf{OR} \\
+        \hline
+        Layup & Distance & -3.46 & 0.10 & $<0.001$ & 0.03 \\
+        Layup & Movement\_drive & 19.70 & 0.25 & $<0.001$ & 3.6e8 \\
+        Hook Shot & Distance & -1.84 & 0.08 & $<0.001$ & 0.16 \\
+        Hook Shot & PlayerType\_G & -1.66 & 0.13 & $<0.001$ & 0.19 \\
+        Dunk & PlayerType\_G & -3.05 & 0.18 & $<0.001$ & 0.05 \\
+        Tip-In & PlayerType\_G & -2.73 & 0.25 & $<0.001$ & 0.07 \\
+        \hline
+    \end{tabular}%
+    }
+    \vspace{0.2cm}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{The Impact of Distance:} Across alternative shot types (Layup, Hook Shot, Dunk, Tip-In), the feature 
+    \\    
+    \texttt{Distance} had a highly significant negative coefficient ($p < 0.001$). For example, as distance from the hoop increases, the odds of attempting a Layup (OR = 0.03) or a Hook Shot (OR = 0.16) are very small compared to an Above-Head shot. Practically, this means that players far from the basket will almost exclusively default to a standard jump shot rather than attempting specialized close-range mechanics.
+    \item \textbf{Player Position Constraints:} The \texttt{PlayerType\_G} (Guard) feature showed strong negative coefficients when predicting power-based or close-range shots like Dunks (OR = 0.05), Tip-Ins (OR = 0.07), and Hook Shots (OR = 0.19). This logically aligns with basketball reality: guards are typically shorter players positioned along the perimeter, making them significantly less likely to execute these interior shots compared to Centers (the implicit baseline).
+    \item \textbf{Movement Dynamics:} The feature \texttt{Movement\_drive} showed a massive positive coefficient for Layups ($\beta = 19.70, p < 0.001$). A player actively driving towards the basket is almost exclusively going to attempt a layup in motion rather than abruptly stopping to take a static above-head shot.
+\end{itemize}
+
+\vspace{0.2cm}
+\noindent \textbf{Conclusion on Model Logic:} The abundance of highly significant coefficients that perfectly mirror real-world basketball mechanics demonstrates that multinomial logistic regression is an exceptionally effective and highly interpretable model for inferring the dynamics of shot selection.
+\vspace{0.3cm}
+
+\textbf{2. DGP: Ordinal vs. Multinomial Regression}\\
+To demonstrate a scenario where ordinal logistic regression definitively outperforms its multinomial counterpart, I constructed a Data Generating Process (DGP) simulating disease progression. The DGP utilized a latent continuous variable bounded by thresholds, intentionally generating a severe class imbalance: 609 Mild, 362 Moderate, and only 29 Severe cases. 
+
+When evaluated specifically on the rare \textbf{Severe} class, the \textbf{multinomial model failed completely}, correctly identifying 0 out of 29 cases. Because a multinomial model is greedy attempting to learn a completely independent set of feature weights for every target class the 29 samples were insufficient to estimate reliable weights, leading to misclassification. 
+
+Conversely, the \textbf{ordinal model successfully identified 3 of the 29 severe cases} and yielded a significantly higher average predicted probability for the true severe class ($0.228$ vs $0.160$). This occurs because ordinal regression leverages the \textbf{proportional odds assumption}. It learns a single, shared set of feature weights across all 1,000 patients, borrowing statistical power from the majority classes to understand the general trajectory of the disease. It then only utilizes the 29 severe patients to calculate a single scalar threshold (intercept), making it vastly more robust when predicting rare, ordered categories.
+
+\end{document}
